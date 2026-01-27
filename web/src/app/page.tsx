@@ -1,64 +1,179 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+
+type VideoMetadata = {
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+};
+
+type UploadResponse = {
+  video_id: string;
+  file_name: string;
+  metadata: VideoMetadata;
+};
 
 export default function Home() {
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<UploadResponse | null>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0] ?? null;
+    setFile(nextFile);
+    setResult(null);
+    setError(null);
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setResult(null);
+
+    if (!file) {
+      setError("Please choose an MP4 file first.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setIsUploading(true);
+    try {
+      const response = await fetch("http://localhost:8000/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        const message =
+          typeof detail?.detail === "string"
+            ? detail.detail
+            : "Upload failed. Please try again.";
+        throw new Error(message);
+      }
+
+      const data: UploadResponse = await response.json();
+      setResult(data);
+    } catch (err) {
+      let message = "Something went wrong.";
+      
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        message = "Cannot connect to server. Make sure the backend is running on http://localhost:8000";
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      
+      setError(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-zinc-950 text-zinc-50">
+      <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-10 px-6 py-16">
+        <header>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            CoD POV Coach
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 text-sm text-zinc-400">
+            Upload an Xbox POV MP4 gameplay clip to inspect basic video
+            metadata before analysis.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        </header>
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-lg shadow-black/40">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <label
+                htmlFor="file"
+                className="block text-sm font-medium text-zinc-200"
+              >
+                MP4 gameplay clip
+              </label>
+              <input
+                id="file"
+                type="file"
+                accept="video/mp4"
+                onChange={handleFileChange}
+                className="block w-full cursor-pointer rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-500 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-400"
+              />
+              <p className="text-xs text-zinc-500">
+                Only local MP4 files recorded from your capture card are
+                supported. No YouTube or Twitch links.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isUploading || !file}
+              className="inline-flex items-center justify-center rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:bg-zinc-700"
+            >
+              {isUploading ? "Uploading..." : "Upload & Analyze"}
+            </button>
+
+            {error && (
+              <p className="text-sm text-red-400" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+        </section>
+
+        {result && (
+          <section className="space-y-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-lg shadow-black/40">
+            <h2 className="text-lg font-semibold tracking-tight">
+              Video metadata
+            </h2>
+            <div className="grid gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-zinc-500">
+                  Video ID
+                </div>
+                <div className="mt-1 font-mono text-zinc-100">
+                  {result.video_id}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-zinc-500">
+                  File name
+                </div>
+                <div className="mt-1 font-mono text-zinc-100">
+                  {result.file_name}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-zinc-500">
+                  Duration
+                </div>
+                <div className="mt-1 font-mono text-zinc-100">
+                  {result.metadata.duration.toFixed(2)} s
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-zinc-500">
+                  Resolution
+                </div>
+                <div className="mt-1 font-mono text-zinc-100">
+                  {result.metadata.width} × {result.metadata.height}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-zinc-500">
+                  FPS
+                </div>
+                <div className="mt-1 font-mono text-zinc-100">
+                  {result.metadata.fps.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
